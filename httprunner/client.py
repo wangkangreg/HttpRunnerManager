@@ -1,10 +1,11 @@
-import json
-import logging
+# encoding: utf-8
+
 import re
 import time
 
 import requests
 import urllib3
+from httprunner import logger
 from httprunner.exception import ParamsError
 from requests import Request, Response
 from requests.exceptions import (InvalidSchema, InvalidURL, MissingSchema,
@@ -13,14 +14,6 @@ from requests.exceptions import (InvalidSchema, InvalidURL, MissingSchema,
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 absolute_http_url_regexp = re.compile(r"^https?://", re.I)
-
-
-def prepare_kwargs(method, kwargs):
-    if method == "POST":
-        # if request content-type is application/json, request data should be dumped
-        content_type = kwargs.get("headers", {}).get("content-type", "")
-        if content_type.startswith("application/json") and "data" in kwargs:
-            kwargs["data"] = json.dumps(kwargs["data"])
 
 
 class ApiResponse(Response):
@@ -53,7 +46,7 @@ class HttpSession(requests.Session):
         if absolute_http_url_regexp.match(path):
             return path
         elif self.base_url:
-            return "%s%s" % (self.base_url, path)
+            return "{}/{}".format(self.base_url.rstrip("/"), path.lstrip("/"))
         else:
             raise ParamsError("base url missed!")
 
@@ -96,58 +89,61 @@ class HttpSession(requests.Session):
         :param cert: (optional)
             if String, path to ssl client cert file (.pem). If Tuple, ('cert', 'key') pair.
         """
+        # store detail data of request and response
+        self.meta_data = {}
 
         # prepend url with hostname unless it's already an absolute URL
         url = self._build_url(url)
-        logging.info(" Start to {method} {url}".format(method=method, url=url))
-        logging.debug(" kwargs: {kwargs}".format(kwargs=kwargs))
-        # store meta data that is used when reporting the request to locust's statistics
-        request_meta = {}
 
         # set up pre_request hook for attaching meta data to the request object
-        request_meta["method"] = method
-        request_meta["start_time"] = time.time()
-
-        if "httpntlmauth" in kwargs:
-            from requests_ntlm import HttpNtlmAuth
-            auth_account = kwargs.pop("httpntlmauth")
-            kwargs["auth"] = HttpNtlmAuth(
-                auth_account["username"], auth_account["password"])
+        self.meta_data["method"] = method
 
         kwargs.setdefault("timeout", 120)
 
+        self.meta_data["request_time"] = time.time()
         response = self._send_request_safe_mode(method, url, **kwargs)
-        request_meta["url"] = (response.history and response.history[0] or response)\
-            .request.path_url
-
         # record the consumed time
-        request_meta["response_time"] = int((time.time() - request_meta["start_time"]) * 1000)
+        self.meta_data["response_time_ms"] = round((time.time() - self.meta_data["request_time"]) * 1000, 2)
+        self.meta_data["elapsed_ms"] = response.elapsed.microseconds / 1000.0
+
+        self.meta_data["url"] = (response.history and response.history[0] or response)\
+            .request.url
+
+        self.meta_data["request_headers"] = response.request.headers
+        self.meta_data["request_body"] = response.request.body
+        self.meta_data["status_code"] = response.status_code
+        self.meta_data["response_headers"] = response.headers
+
+        try:
+            self.meta_data["response_body"] = response.json()
+        except ValueError:
+            self.meta_data["response_body"] = response.content
+
+        msg = "response details:\n"
+        msg += "> status_code: {}\n".format(self.meta_data["status_code"])
+        msg += "> headers: {}\n".format(self.meta_data["response_headers"])
+        msg += "> body: {}".format(self.meta_data["response_body"])
+        logger.log_debug(msg)
 
         # get the length of the content, but if the argument stream is set to True, we take
         # the size from the content-length header, in order to not trigger fetching of the body
         if kwargs.get("stream", False):
-            request_meta["content_size"] = int(response.headers.get("content-length") or 0)
+            self.meta_data["content_size"] = int(self.meta_data["response_headers"].get("content-length") or 0)
         else:
-            request_meta["content_size"] = len(response.content or "")
-
-        request_meta["request_headers"] = response.request.headers
-        request_meta["request_body"] = response.request.body
-        request_meta["status_code"] = response.status_code
-        request_meta["response_headers"] = response.headers
-        request_meta["response_content"] = response.content
-
-        logging.debug(" response: {response}".format(response=request_meta))
+            self.meta_data["content_size"] = len(response.content or "")
 
         try:
             response.raise_for_status()
         except RequestException as e:
-            logging.error(u" Failed to {method} {url}! exception msg: {exception}".format(
-                method=method, url=url, exception=str(e)))
+            logger.log_error(u"{exception}".format(exception=str(e)))
         else:
-            logging.info(
-                """ status_code: {}, response_time: {} ms, response_length: {} bytes"""\
-                .format(request_meta["status_code"], request_meta["response_time"], \
-                    request_meta["content_size"]))
+            logger.log_info(
+                """status_code: {}, response_time(ms): {} ms, response_length: {} bytes""".format(
+                    self.meta_data["status_code"],
+                    self.meta_data["response_time_ms"],
+                    self.meta_data["content_size"]
+                )
+            )
 
         return response
 
@@ -157,7 +153,10 @@ class HttpSession(requests.Session):
         Safe mode has been removed from requests 1.x.
         """
         try:
-            prepare_kwargs(method, kwargs)
+            msg = "processed request:\n"
+            msg += "> {method} {url}\n".format(method=method, url=url)
+            msg += "> kwargs: {kwargs}".format(kwargs=kwargs)
+            logger.log_debug(msg)
             return requests.Session.request(self, method, url, **kwargs)
         except (MissingSchema, InvalidSchema, InvalidURL):
             raise

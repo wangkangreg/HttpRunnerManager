@@ -1,9 +1,12 @@
+# encoding: utf-8
+
 import io
 import multiprocessing
 import os
 import sys
 
-from httprunner.testcase import load_test_file
+from httprunner.logger import color_print
+from httprunner.testcase import TestcaseLoader
 from locust.main import main
 
 
@@ -13,7 +16,7 @@ def parse_locustfile(file_path):
         if file_path is a YAML/JSON file, convert it to locustfile
     """
     if not os.path.isfile(file_path):
-        print("file path invalid, exit.")
+        color_print("file path invalid, exit.", "RED")
         sys.exit(1)
 
     file_suffix = os.path.splitext(file_path)[1]
@@ -23,7 +26,7 @@ def parse_locustfile(file_path):
         locustfile_path = gen_locustfile(file_path)
     else:
         # '' or other suffix
-        print("file type should be YAML/JSON/Python, exit.")
+        color_print("file type should be YAML/JSON/Python, exit.", "RED")
         sys.exit(1)
 
     return locustfile_path
@@ -34,9 +37,10 @@ def gen_locustfile(testcase_file_path):
     locustfile_path = 'locustfile.py'
     template_path = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
-        'locustfile_template'
+        "templates",
+        "locustfile_template"
     )
-    testset = load_test_file(testcase_file_path)
+    testset = TestcaseLoader.load_test_file(testcase_file_path)
     host = testset.get("config", {}).get("request", {}).get("base_url", "")
 
     with io.open(template_path, encoding='utf-8') as template:
@@ -60,11 +64,11 @@ def start_slave(sys_argv):
     sys.argv = sys_argv
     main()
 
-def run_locusts_on_cpu_cores(sys_argv, cpu_cores_num_value):
+def run_locusts_with_processes(sys_argv, processes_count):
     processes = []
     manager = multiprocessing.Manager()
 
-    for _ in range(cpu_cores_num_value):
+    for _ in range(processes_count):
         p_slave = multiprocessing.Process(target=start_slave, args=(sys_argv,))
         p_slave.daemon = True
         p_slave.start()

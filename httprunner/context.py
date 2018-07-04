@@ -1,10 +1,12 @@
+# encoding: utf-8
+
 import copy
 import os
 import re
 import sys
-from collections import OrderedDict
 
 from httprunner import exception, testcase, utils
+from httprunner.compat import OrderedDict
 
 
 class Context(object):
@@ -110,13 +112,18 @@ class Context(object):
             variables = utils.convert_to_order_dict(variables)
 
         for variable_name, value in variables.items():
-            variable_evale_value = self.testcase_parser.parse_content_with_bindings(value)
+            variable_eval_value = self.eval_content(value)
 
             if level == "testset":
-                self.testset_shared_variables_mapping[variable_name] = variable_evale_value
+                self.testset_shared_variables_mapping[variable_name] = variable_eval_value
 
-            self.testcase_variables_mapping[variable_name] = variable_evale_value
-            self.testcase_parser.update_binded_variables(self.testcase_variables_mapping)
+            self.bind_testcase_variable(variable_name, variable_eval_value)
+
+    def bind_testcase_variable(self, variable_name, variable_value):
+        """ bind and update testcase variables mapping
+        """
+        self.testcase_variables_mapping[variable_name] = variable_value
+        self.testcase_parser.update_binded_variables(self.testcase_variables_mapping)
 
     def bind_extracted_variables(self, variables):
         """ bind extracted variables to testset context
@@ -125,8 +132,7 @@ class Context(object):
         """
         for variable_name, value in variables.items():
             self.testset_shared_variables_mapping[variable_name] = value
-            self.testcase_variables_mapping[variable_name] = value
-            self.testcase_parser.update_binded_variables(self.testcase_variables_mapping)
+            self.bind_testcase_variable(variable_name, value)
 
     def __update_context_functions_config(self, level, config_mapping):
         """
@@ -140,33 +146,32 @@ class Context(object):
         self.testcase_functions_config.update(config_mapping)
         self.testcase_parser.bind_functions(self.testcase_functions_config)
 
+    def eval_content(self, content):
+        """ evaluate content recursively, take effect on each variable and function in content.
+            content may be in any data structure, include dict, list, tuple, number, string, etc.
+        """
+        return self.testcase_parser.eval_content_with_bindings(content)
+
     def get_parsed_request(self, request_dict, level="testcase"):
         """ get parsed request with bind variables and functions.
         @param request_dict: request config mapping
         @param level: testset or testcase
         """
         if level == "testset":
-            request_dict = self.testcase_parser.parse_content_with_bindings(
+            request_dict = self.eval_content(
                 request_dict
             )
             self.testset_request_config.update(request_dict)
+
         testcase_request_config = utils.deep_update_dict(
             copy.deepcopy(self.testset_request_config),
             request_dict
         )
-        parsed_request = self.testcase_parser.parse_content_with_bindings(
+        parsed_request = self.eval_content(
             testcase_request_config
         )
 
         return parsed_request
-
-    def get_testcase_variables_mapping(self):
-        return self.testcase_variables_mapping
-
-    def exec_content_functions(self, content):
-        """ execute functions in content.
-        """
-        self.testcase_parser.eval_content_functions(content)
 
     def eval_check_item(self, validator, resp_obj):
         """ evaluate check item in validator
@@ -183,34 +188,38 @@ class Context(object):
             }
         """
         check_item = validator["check"]
-        # check_item should only be in 3 types:
+        # check_item should only be in 4 types:
         # 1, variable reference, e.g. $token
         # 2, string joined by delimiter. e.g. "status_code", "headers.content-type"
         # 3, regex string, e.g. "LB[\d]*(.*)RB[\d]*"
-        if testcase.extract_variables(check_item):
-            # type 1
-            check_value = self.testcase_parser.eval_content_variables(check_item)
+        # 4, dict or list, maybe containing variables reference, e.g. {"var": "$abc"}
+        if isinstance(check_item, (dict, list)) or testcase.extract_variables(check_item):
+            # type 4 or type 1
+            check_value = self.eval_content(check_item)
         else:
             try:
                 # type 2 or type 3
                 check_value = resp_obj.extract_field(check_item)
             except exception.ParseResponseError:
-                raise exception.ParseResponseError("failed to extract check item in response!")
+                msg = "failed to extract check item from response!\n"
+                msg += "response content: {}".format(resp_obj.content)
+                raise exception.ParseResponseError(msg)
 
         validator["check_value"] = check_value
 
         # expect_value should only be in 2 types:
         # 1, variable reference, e.g. $expect_status_code
         # 2, actual value, e.g. 200
-        expect_value = self.testcase_parser.eval_content_variables(validator["expect"])
+        expect_value = self.eval_content(validator["expect"])
         validator["expect"] = expect_value
         return validator
 
-    def do_validation(self, validator_dict, err_msg):
+    def do_validation(self, validator_dict):
         """ validate with functions
         """
+        # TODO: move comparator uniform to init_task_suite
         comparator = utils.get_uniform_comparator(validator_dict["comparator"])
-        validate_func = self.testcase_parser.get_bind_item("function", comparator)
+        validate_func = self.testcase_parser.get_bind_function(comparator)
 
         if not validate_func:
             raise exception.FunctionNotFound("comparator not found: {}".format(comparator))
@@ -219,21 +228,22 @@ class Context(object):
         check_value = validator_dict["check_value"]
         expect_value = validator_dict["expect"]
 
-        try:
-            if check_value is None or expect_value is None:
-                assert comparator in ["is", "eq", "equals", "=="]
+        if (check_value is None or expect_value is None) \
+            and comparator not in ["is", "eq", "equals", "=="]:
+            raise exception.ParamsError("Null value can only be compared with comparator: eq/equals/==")
 
+        try:
             validate_func(validator_dict["check_value"], validator_dict["expect"])
         except (AssertionError, TypeError):
-            err_msg = err_msg + "\n".join([
-                "<br />\t校验参数: %s;" % check_item,
-                "\t实际返回值: %s" % (check_value),
-                "\t比较类型: %s;" % comparator,
-                "\t期望值: %s" % (expect_value)
+            err_msg = "\n" + "\n".join([
+                "\tcheck item name: %s;" % check_item,
+                "\tcheck item value: %s (%s);" % (check_value, type(check_value).__name__),
+                "\tcomparator: %s;" % comparator,
+                "\texpected value: %s (%s)." % (expect_value, type(expect_value).__name__)
             ])
             raise exception.ValidationError(err_msg)
 
-    def validate(self, validators, resp_obj, err_msg):
+    def validate(self, validators, resp_obj):
         """ check validators with the context variable mapping.
         @param (list) validators
         @param (object) resp_obj
@@ -243,6 +253,6 @@ class Context(object):
                 testcase.parse_validator(validator),
                 resp_obj
             )
-            self.do_validation(validator_dict, err_msg)
+            self.do_validation(validator_dict)
 
         return True

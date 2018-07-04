@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}编辑配置{% endblock %}
 {% load staticfiles %}
-
+{% load custom_tags %}
 {% block content %}
 
 
@@ -12,17 +12,17 @@
             <dl class="am-icon-home" style="float: right;">当前位置： 用例管理 > <a href="#">更新配置</a></dl>
         </div>
 
-        <div class="am-tabs am-margin" data-am-tabs>
-            <ul class="am-tabs-nav am-nav am-nav-tabs">
-                <li class="am-active"><a href="#tab1">messages</a></li>
-                <li><a href="#tab2">variables</a></li>
-                <li><a href="#tab3">request</a></li>
+        <div class="am-tabs am-margin">
+            <ul class="am-tabs-nav am-nav am-nav-tabs" id="tab-test">
+                <li><a href="javascript:;" data-target="#tab1">messages</a></li>
+                <li><a href="javascript:;" data-target="#tab2">variables/parameters/hooks</a></li>
+                <li><a href="javascript:;" data-target="#tab3">request</a></li>
             </ul>
 
             <div class="am-tabs-bd">
-                <div class="am-tab-panel am-fade am-in am-active " id="tab1">
+                <div class="am-tab-panel" id="tab1">
                     <form class="form-horizontal" id="form_config">
-                        <div class="form-group has-feedback has-info">
+                        <div class="form-group">
                             <label for="test_index" class="col-md-2 control-label text-info" style="font-size: 14px;"
                                    hidden>配置索引:</label>
                             <div class="col-md-4">
@@ -32,78 +32,100 @@
                             </div>
                         </div>
 
-                        <div class="form-group has-feedback has-info">
-                            <label for="config_name" class="col-md-2 control-label text-info" style="font-size: 14px;">config_name:</label>
-                            <div class="col-md-4">
-                                <input type="text" class="form-control" id="config_name" placeholder="配置名称"
-                                       name="config_name"
-                                       value="{{ info.name }}">
-                                <span class="glyphicon glyphicon-certificate form-control-feedback"
-                                      aria-hidden="true"></span>
+                        <div class="form-group">
+                            <div class="input-group col-md-4 col-md-offset-1">
+                                <div class="input-group-addon" style="color: #0a628f">配置名称</div>
+                                <input type="text" class="form-control" id="config_name" name="config_name"
+                                       placeholder="配置名称" value="{{ info.name }}">
                             </div>
                         </div>
 
-
-                        <div class="form-group has-feedback has-info">
-                            <label for="project" class="col-md-2 control-label text-info" style="font-size: 14px;">project:</label>
-                            <div class="col-md-4">
-                                <input type="text" class="form-control" id="project" placeholder="所属项目"
-                                       name="project"
-                                       value="{{ info.belong_project }}" readonly>
-                                <span class="glyphicon glyphicon-certificate form-control-feedback"
-                                      aria-hidden="true"></span>
+                        <div class="form-group">
+                            <div class="input-group col-md-4 col-md-offset-1">
+                                <div class="input-group-addon" style="color: #0a628f">所属项目</div>
+                                <select name="project" class="form-control"
+                                        onchange="auto_load('#form_config', '/api/add_config/', '#belong_module_id', 'module')">
+                                    <option value="{{ info.belong_project }}">{{ info.belong_project }}</option>
+                                    {% for obj in project %}
+                                        {% ifnotequal info.belong_project obj.project_name %}
+                                            <option value='{{ obj.project_name }}'>{{ obj.project_name }}</option>
+                                        {% endifnotequal %}
+                                    {% endfor %}
+                                    <option value="请选择">请选择</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="input-group col-md-4 col-md-offset-1">
+                                <div class="input-group-addon" style="color: #0a628f">所属模块</div>
+                                <select id="belong_module_id" name="module" class="form-control">
+                                    <option value="{{ info.belong_module.id }}">{{ info.belong_module.module_name }}</option>
+                                </select>
                             </div>
                         </div>
 
-                        <div class="form-group has-feedback has-info">
-                            <label for="config_module" class="col-md-2 control-label text-info"
-                                   style="font-size: 14px;">module:</label>
-                            <div class="col-md-4">
-                                <input type="text" class="form-control" id="config_module" placeholder="所属模块"
-                                       name="config_module"
-                                       value="{{ info.belong_module.module_name }}" readonly>
-                                <span class="glyphicon glyphicon-certificate form-control-feedback"
-                                      aria-hidden="true"></span>
-                            </div>
-                        </div>
-
-                        <div class="form-group has-feedback has-info">
-                            <label for="config_author" class="col-md-2 control-label text-info"
-                                   style="font-size: 14px;">author:</label>
-                            <div class="col-md-4">
-                                <input type="text" class="form-control" id="config_author" placeholder="创建者"
-                                       name="config_author"
-                                       value="{{ info.author }}">
-                                <span class="glyphicon glyphicon-user form-control-feedback" aria-hidden="true"></span>
+                        <div class="form-group">
+                            <div class="input-group col-md-4 col-md-offset-1">
+                                <div class="input-group-addon" style="color: #0a628f">编写人员</div>
+                                <input type="text" class="form-control" id="config_author" name="author"
+                                       placeholder="创建者" value="{{ info.author }}">
                             </div>
                         </div>
                     </form>
                 </div>
-                <div class="am-tab-panel am-fade" id="tab2">
-                    <button class="btn btn-info" value="添 加" onclick="addNewRow('variables')">add variables</button>
-                    <button class="btn btn-danger" value="删 除" onclick="removeRow('variables')">del variables</button>
+                <div class="am-tab-panel" id="tab2">
+                    <button class="btn btn-info" value="添 加" onclick="add_row('variables')">add variables</button>
+                    <button class="btn btn-danger" value="删 除" onclick="del_row('variables')">del variables</button>
+                    <button class="btn btn-info" value="添 加" onclick="add_params('params')">add param</button>
+                    <button class="btn btn-danger" value="删 除" onclick="del_row('params')">del param</button>
+                    <button class="btn btn-info" value="添 加" onclick="add_row('hooks')">add hooks</button>
+                    <button class="btn btn-danger" value="删 除" onclick="del_row('hooks')">del hooks</button>
                     <form id="config_variables">
                         <table class="table table-hover table-condensed table-bordered table-striped" id="variables">
                             <caption>Variables:</caption>
                             <thead>
                             <tr class="active text-success">
                                 <th width="5%" align="center">Option</th>
-                                <th width="40%" align="center">Key</th>
-                                <th width="55%" align="center">Value</th>
+                                <th width="30%" align="center">Key</th>
+                                <th width="8%" align="center">Type</th>
+                                <th width="57%" align="center">Value</th>
                             </tr>
                             </thead>
                             <tbody>
                             {% for foo in request.variables %}
                                 <tr>
-                                    <td><input type="checkbox" name="variables" id="chkArr_{{ forloop.counter }}"
-                                               style="width:55px"></td>
+                                    <td><input type="checkbox" name="variables" style="width:55px"></td>
                                     {% for key, value in foo.items %}
-                                        <td><input type="text" name="cell1_keyvariables{{ forloop.parentloop.counter }}"
-                                                   id="nodename{{ forloop.parentloop.counter }}"
+                                        <td><input type="text" name='test[][key]'
                                                    value="{{ key }}" style="width:100%; border: none"></td>
-                                        <td><input type="text"
-                                                   name="cell2_valuevariables{{ forloop.parentloop.counter }}"
-                                                   id="nodename{{ forloop.parentloop.counterr }}" value="{{ value }}"
+                                        <td>
+                                            <select name='test[][type]' class='form-control'
+                                                    style='height: 25px; font-size: 15px; padding-top: 0px; padding-left: 0px; border: none'>
+
+                                                {% if value|data_type == 'str' %}
+                                                    <option>string</option>
+                                                    <option>int</option>
+                                                    <option>float</option>
+                                                    <option>boolean</option>
+                                                {% elif value|data_type == 'int' %}
+                                                    <option>int</option>
+                                                    <option>string</option>
+                                                    <option>float</option>
+                                                    <option>boolean</option>
+                                                {% elif value|data_type == 'float' %}
+                                                    <option>float</option>
+                                                    <option>string</option>
+                                                    <option>int</option>
+                                                    <option>boolean</option>
+                                                {% elif value|data_type == 'bool' %}
+                                                    <option>boolean</option>
+                                                    <option>string</option>
+                                                    <option>int</option>
+                                                    <option>float</option>
+                                                {% endif %}
+                                            </select>
+                                        </td>
+                                        <td><input type="text" name='test[][value]' value="{{ value }}"
                                                    style="width:100%; border: none"></td>
                                     {% endfor %}
                                 </tr>
@@ -111,59 +133,234 @@
                             </tbody>
                         </table>
                     </form>
-                </div>
-                <div class="am-tab-panel am-fade" id="tab3">
-                    <div class="form-inline">
-                        <div class="form-group has-success">
-                            <label for="url" style="font-size: 14px;">Base Url:</label>
-                            <input type="text" class="form-control am-input-lg" placeholder="Base Url" name="url"
-                                   id="config_url" value="{{ request.request.base_url }}">
-                        </div>
+                    <form id="config_params">
+                        <table class="table table-hover table-condensed table-bordered table-striped" id="params">
+                            <caption>parameters:</caption>
+                            <thead>
+                            <tr class="active text-success">
+                                <th width="5%" align="center">Option</th>
+                                <th width="20%" align="center">Key</th>
+                                <th width="75%" align="center">Value</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for foo in request.parameters %}
+                                <tr>
+                                    {% for key, value in foo.items %}
+                                        <td><input type="checkbox" name="params" style="width:55px"></td>
+                                        <td><textarea name='test[][key]'
+                                                      style="width:100%; border: none">{{ key }}</textarea></td>
+                                        <td><textarea name='test[][value]'
+                                                      style="width:100%; border: none">{{ value }}</textarea></td>
 
-                        <div class="form-group has-warning ">
-                            <label for="DataType"
-                                   style="font-size: 14px;"><code>&nbsp;</code>DataType:</label>
+                                    {% endfor %}
+
+                                </tr>
+                            {% endfor %}
+
+                            </tbody>
+                        </table>
+                    </form>
+
+                    <form id="config_hooks">
+                        <table class="table table-hover table-condensed table-bordered table-striped" id="hooks">
+                            <caption>hooks:</caption>
+                            <thead>
+                            <tr class="active text-success">
+                                <th width="5%" align="center">Option</th>
+                                <th width="47.5%" align="center">setup_hooks</th>
+                                <th width="47.5%" align="center">teardown_hooks</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% if request.setup_hooks|length >= request.teardown_hooks|length %}
+                                {% for foo in  request.setup_hooks %}
+                                    <tr>
+                                        <td><input type="checkbox" name="hooks" style="width:55px"></td>
+                                        <td><input type="text" name='test[][key]'
+                                                   value="{{ foo }}" style="width:100%; border: none"></td>
+                                        <td>
+                                            {% for foos in  request.teardown_hooks %}
+                                                {% if forloop.parentloop.counter0 == forloop.counter0 %}
+                                                    <input type="text" name='test[][value]'
+                                                           value="{{ foos }}"
+                                                           style="width:100%; border: none">
+                                                {% endif %}
+                                            {% endfor %}
+                                            {% if forloop.counter > request.teardown_hooks|length %}
+                                                <input type="text" name='test[][value]'
+                                                       value=""
+                                                       style="width:100%; border: none">
+
+                                            {% endif %}
+                                        </td>
+
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                {% for foo in  request.teardown_hooks %}
+                                    <tr>
+                                        <td><input type="checkbox" name="hooks" style="width:55px"></td>
+                                        <td>
+                                            {% for foos in  request.setup_hooks %}
+                                                {% if forloop.parentloop.counter0 == forloop.counter0 %}
+                                                    <input type="text" name='test[][key]'
+                                                           value="{{ foos }}"
+                                                           style="width:100%; border: none">
+                                                {% endif %}
+                                            {% endfor %}
+                                            {% if forloop.counter > request.setup_hooks|length %}
+                                                <input type="text" name='test[][key]'
+                                                       value=""
+                                                       style="width:100%; border: none">
+
+                                            {% endif %}
+                                        </td>
+                                        <td><input type="text" name='test[][value]'
+                                                   value="{{ foo }}" style="width:100%; border: none"></td>
+
+                                    </tr>
+                                {% endfor %}
+
+                            {% endif %}
+
+                            </tbody>
+                        </table>
+                    </form>
+                </div>
+                <div class="am-tab-panel" id="tab3">
+                    <div class="form-inline">
+                        <div class="input-group">
+                            <div class="input-group-addon">Type</div>
                             <select class="form-control" name="DataType" id="config_data_type">
-                                <option>data</option>
-                                <option>json</option>
-                                <option>params</option>
+                                {% if 'data' in request.request.keys %}
+                                    <option selected>data</option>
+                                    <option>json</option>
+                                    <option>params</option>
+                                {% elif 'json' in request.request.keys %}
+                                    <option selected>json</option>
+                                    <option>data</option>
+                                    <option>params</option>
+                                {% elif 'params' in request.request.keys %}
+                                    <option selected>params</option>
+                                    <option>data</option>
+                                    <option>json</option>
+                                {% else %}
+                                    <option>data</option>
+                                    <option>json</option>
+                                    <option>params</option>
+                                {% endif %}
                             </select>
                         </div>
 
-                        <button class="btn btn-info" value="添 加" onclick="addNewRow('data')">add data</button>
-                        <button class="btn btn-danger" value="删 除" onclick="removeRow('data')">del data</button>
-                        <button class="btn btn-info" value="添 加" onclick="addNewRow('header')">add headers</button>
-                        <button class="btn btn-danger" value="删 除" onclick="removeRow('header')">del headers </button>
+                        <button class="btn btn-info" value="添 加" onclick="add_row('data')" id="add_data">add data
+                        </button>
+                        <button class="btn btn-danger" value="删 除" onclick="del_row('data')" id="del_data">del data
+                        </button>
+                        <button class="btn btn-info" value="添 加" onclick="add_row('header')">add headers</button>
+                        <button class="btn btn-danger" value="删 除" onclick="del_row('header')">del headers</button>
                         <form id="config_request_data">
-                            <table class="table table-hover table-condensed table-bordered table-striped" id="data">
-                                <caption>request:</caption>
-                                <thead>
-                                <tr class="active text-success">
-                                    <th width="5%" align="center">Option</th>
-                                    <th width="40%" align="center">Key</th>
-                                    <th width="55%" align="center">Value</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                {% if 'data' in request.request.keys %}
-                                    {% for key, value in request.request.data.items %}
-                                        <tr>
-                                            <td><input type="checkbox" name="data" id="chkArr_{{ forloop.counter }}"
-                                                       style="width:55px">
-                                            </td>
-                                            <td><input type="text" name="cell1_keydata{{ forloop.counter }}"
-                                                       id="nodename{{ forloop.counter }}" value="{{ key }}"
-                                                       style="width:100%; border: none"></td>
-                                            <td><input type="text" name="cell2_valuedata{{ forloop.counter }}"
-                                                       id="nodename{{ forloop.counter }}" value="{{ value }}"
-                                                       style="width:100%; border: none"></td>
-                                        </tr>
+                            {% if 'json' in request.request.keys %}
+                                <span style="font-size:10px;" id="json-text">
+                                   <div style="margin-left: 0px; margin-top: 5px; height: 200px">
+                                       <pre id="code" class="ace_editor"
+                                            style="margin-top: 0px; margin-bottom: 0px; min-height: 200px;">
+<textarea style="left: 0px">
+{{ request.request.json|json_dumps }}
+</textarea>
+                                       </pre>
+                                   </div>
+                                </span>
 
-                                    {% endfor %}
-                                {% endif %}
+                                </span>
+                            {% else %}
+                                <table class="table table-hover table-condensed table-bordered table-striped" id="data">
+                                    <caption>request:</caption>
+                                    <thead>
+                                    <tr class="active text-success">
+                                        <th width="5%" align="center">Option</th>
+                                        <th width="30%" align="center">Key</th>
+                                        <th width="8%" align="center">Type</th>
+                                        <th width="57%" align="center">Value</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {% if 'data' in request.request.keys %}
+                                        {% for key, value in request.request.data.items %}
+                                            <tr>
+                                                <td><input type="checkbox" name="data" style="width:55px">
+                                                </td>
+                                                <td><input type="text" name='test[][key]' value="{{ key }}"
+                                                           style="width:100%; border: none"></td>
+                                                <td><select name='test[][type]' class='form-control'
+                                                            style='height: 25px; font-size: 15px; padding-top: 0px; padding-left: 0px; border: none'>
+                                                    {% if value|data_type == 'str' %}
+                                                        <option>string</option>
+                                                        <option>int</option>
+                                                        <option>float</option>
+                                                        <option>boolean</option>
+                                                    {% elif value|data_type == 'int' %}
+                                                        <option>int</option>
+                                                        <option>string</option>
+                                                        <option>float</option>
+                                                        <option>boolean</option>
+                                                    {% elif value|data_type == 'float' %}
+                                                        <option>float</option>
+                                                        <option>string</option>
+                                                        <option>int</option>
+                                                        <option>boolean</option>
+                                                    {% elif value|data_type == 'bool' %}
+                                                        <option>boolean</option>
+                                                        <option>string</option>
+                                                        <option>int</option>
+                                                        <option>float</option>
+                                                    {% endif %}
+                                                </select></td>
+                                                <td><input type="text" name='test[][value]' value="{{ value }}"
+                                                           style="width:100%; border: none"></td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% elif 'params' in request.request.keys %}
+                                        {% for key, value in request.request.params.items %}
+                                            <tr>
+                                                <td><input type="checkbox" name="data"
+                                                           style="width:55px">
+                                                </td>
+                                                <td><input type="text" name='test[][key]' value="{{ key }}"
+                                                           style="width:100%; border: none"></td>
+                                                <td><select name='test[][type]' class='form-control'
+                                                            style='height: 25px; font-size: 15px; padding-top: 0px; padding-left: 0px; border: none'>
+                                                    {% if value|data_type == 'str' %}
+                                                        <option>string</option>
+                                                        <option>int</option>
+                                                        <option>float</option>
+                                                        <option>boolean</option>
+                                                    {% elif value|data_type == 'int' %}
+                                                        <option>int</option>
+                                                        <option>string</option>
+                                                        <option>float</option>
+                                                        <option>boolean</option>
+                                                    {% elif value|data_type == 'float' %}
+                                                        <option>float</option>
+                                                        <option>string</option>
+                                                        <option>int</option>
+                                                        <option>boolean</option>
+                                                    {% elif value|data_type == 'bool' %}
+                                                        <option>boolean</option>
+                                                        <option>string</option>
+                                                        <option>int</option>
+                                                        <option>float</option>
+                                                    {% endif %}
+                                                </select></td>
+                                                <td><input type="text" name='test[][value]' value="{{ value }}"
+                                                           style="width:100%; border: none"></td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% endif %}
+                                    </tbody>
+                                </table>
+                            {% endif %}
 
-                                </tbody>
-                            </table>
                         </form>
 
                         <form id="config_request_headers">
@@ -180,15 +377,13 @@
                                 {% if 'headers' in request.request.keys %}
                                     {% for key, value in request.request.headers.items %}
                                         <tr>
-                                            <td><input type="checkbox" name="header" id="chkArr_{{ forloop.counter }}"
-                                                       style="width:55px">
+                                            <td><input type="checkbox" name="header" style="width:55px">
                                             </td>
-                                            <td><input type="text" name="cell1_keyheader{{ forloop.counter }}"
-                                                       id="nodename{{ forloop.counter }}" value="{{ key }}"
+                                            <td><input type="text" name='test[][key]' value="{{ key }}"
                                                        style="width:100%; border: none"></td>
-                                            <td><input type="text" name="cell2_valueheader{{ forloop.counter }}"
-                                                       id="nodename{{ forloop.counter }}" value="{{ value }}"
-                                                       style="width:100%; border: none"></td>
+                                            <td><input type="text" name='test[][value]' value="{{ value }}"
+                                                       style="width:100%; border: none">
+                                            </td>
                                         </tr>
                                     {% endfor %}
                                 {% endif %}
@@ -210,72 +405,67 @@
 
             </div>
         </div>
-        <table class="table table-hover table-condensed table-bordered table-striped" id="variables">
-            <div class="foods">
-                <ul>版权所有@2017 .微汇金融 <a href="http://ci.weihui.com/" target="_blank" title="微汇金融">微汇金融</a></ul>
-                <dl><a href="" title="返回头部" class="am-icon-btn am-icon-arrow-up"></a></dl>
-            </div>
-
-        </table>
     </div>
 
     <script>
-        function addNewRow(id) {
-            var tabObj = document.getElementById(id);//获取添加数据的表格
-            var rowsNum = tabObj.rows.length;  //获取当前行数
-            var attribute = 'variables';
-            if (id === 'data') {
-                attribute = 'data';
-            } else if (id === 'header') {
-                attribute = 'header';
-            } else if (id === 'extract') {
-                attribute = 'extract';
-            } else if (id === 'validate') {
-                attribute = 'validate';
-            }
-            var style = 'width:100%; border: none';
-            var ids = 'nodename' + rowsNum;
-            var cellHtml1 = "<input type='text' name='cell1_key" + id + rowsNum + "' id='" + ids + "' value='' style='" + style + "' />";
-            var cellHtml2 = "<input type='text' name='cell2_value" + id + rowsNum + "' id='" + ids + "' value='' style='" + style + "' />";
-            var cellHtml3 = "<input type='text' name='cell3_value" + id + rowsNum + "' id='" + ids + "' value='' style='" + style + "' />";
-            var myNewRow = tabObj.insertRow(rowsNum);
-            var newTdObj0 = myNewRow.insertCell(0);
-            var newTdObj1 = myNewRow.insertCell(1);
-            var newTdObj2 = myNewRow.insertCell(2);
-            newTdObj0.innerHTML = "<input type='checkbox' name='" + attribute + "' id='chkArr_" + rowsNum + "' style='width:55px' />";
-            newTdObj1.innerHTML = cellHtml1;
-            if (id !== 'validate') {
-                newTdObj2.innerHTML = cellHtml2;
+        try {
+            editor = ace.edit("code");
+            init_acs('json', 'github', editor);
+        } catch (err) {
+            editor = null;
+        }
+        $("#tab-test").on("click", "li", function () {
+            $(this).addClass("am-active").siblings("li").removeClass("am-active");
+            var target = $(this).children("a").attr("data-target");
+            $(target).addClass("am-active").siblings(".am-tab-panel").removeClass("am-active");
+        }).find("li").eq(0).trigger("click");
+
+
+        $('#config_data_type').on('change', function () {
+            if ($('#config_data_type').val() === 'json') {
+                $('#add_data').attr('disabled', true);
+                $('#del_data').attr('disabled', true);
+                $('#data').remove();
+                var json_text = "<span style=\"font-size:10px;\" id=\"json-text\">\n" +
+                    " <div style=\"margin-left: 0px; margin-top: 5px; height: 200px\">"+
+                    "<pre id=\"code\" class=\"ace_editor\" style=\"margin-top: 0px; margin-bottom: 0px; min-height: 200px;\">\n" +
+                    "<textarea>\n" +
+                    "{\"key\":\"value\"}\n" +
+                    "</textarea>\n" +
+                    "</pre></div></span>";
+                $('#config_request_data').append(json_text);
+                editor = ace.edit("code");
+                init_acs('json', 'github', editor);
+
             } else {
-                newTdObj2.innerHTML = "<select name='cell_2comparator" + id + rowsNum + "' class='form-control' style='height: 25px; font-size: 15px; " +
-                    "padding-top: 0px; padding-left: 0px; border: none'> " +
-                    "<option>equals</option> <option>contains</option> <option>startswith</option> <option>endswith</option> <option>regex_match</option> <option>type_match</option> <option>contained_by</option> <option>less_than</option> <option>less_than_or_equals</option> <option>greater_than</option> <option>greater_than_or_equals</option> <option>not_equals</option> <option>string_equals</option> <option>length_equals</option> <option>length_greater_than</option> <option>length_greater_than_or_equals</option> <option>length_less_than</option> <option>length_less_than_or_equals</option></select>";
-                var newTdObj3 = myNewRow.insertCell(3);
-                newTdObj3.innerHTML = cellHtml3;
-            }
+                var table = '<table class="table table-hover table-condensed table-bordered table-striped" id="data">\n' +
+                    '                                <caption>' + $('#config_data_type').val() + ':</caption>\n' +
+                    '                                <thead>\n' +
+                    '                                <tr class="active text-success">\n' +
+                    '                                    <th width="5%" align="center">Option</th>\n' +
+                    '                                    <th width="30%" align="center">Key</th>\n' +
+                    '                                    <th width="5%" align="center">Type</th>\n' +
+                    '                                    <th width="60%" align="center">Value</th>\n' +
+                    '                                </tr>\n' +
+                    '                                </thead>\n' +
+                    '                                <tbody>\n' +
+                    '                                </tbody>\n' +
+                    '                            </table>';
 
-        }
+                $('#add_data').text('add ' + $('#config_data_type').val());
+                $('#del_data').text('del ' + $('#config_data_type').val());
 
-        /*表格删除行*/
-        function removeRow(id) {
-            var attribute = 'variables';
-            if (id === 'data') {
-                attribute = 'data';
-            } else if (id === 'header') {
-                attribute = 'header';
-            } else if (id === 'extract') {
-                attribute = 'extract';
-            } else if (id === 'validate') {
-                attribute = 'validate';
+                $('#add_data').removeAttr("disabled");
+                $('#del_data').removeAttr("disabled");
+                $('#data').remove();
+                $('#json-text').remove();
+                $('#config_request_data').append(table);
             }
-            var chkObj = document.getElementsByName(attribute);
-            var tabObj = document.getElementById(id);
-            for (var k = 0; k < chkObj.length; k++) {
-                if (chkObj[k].checked) {
-                    tabObj.deleteRow(k + 1);
-                    k = -1;
-                }
-            }
-        }
+        });
+        $(function () {
+            $('#add_data').text('add ' + $('#config_data_type').val());
+            $('#del_data').text('del ' + $('#config_data_type').val());
+        });
+
     </script>
 {% endblock %}

@@ -14,12 +14,15 @@ Including another URLconf
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
 from django.conf.urls import url
+from django.contrib import admin
+from django.views.generic import RedirectView
 
 from HttpRunnerManager.activator import process
 
 urlpatterns = [
+    url(r'^admin/', admin.site.urls),
+    url(r'^favicon\.ico$', RedirectView.as_view(url='/static/assets/img/favicon.ico')),
     url('^(?P<app>(\w+))/(?P<function>(\w+))/$', process),
     url('^(?P<app>(\w+))/(?P<function>(\w+))/(?P<id>(\w+))/$', process),
-    url('^(?P<app>(\w+))/(?P<function>(\w+))/(?P<mode>(\w+))/(?P<id>(\w+))/$', process),
 
 ]
